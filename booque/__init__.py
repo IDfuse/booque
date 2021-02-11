@@ -1,9 +1,9 @@
 # coding: utf-8
-import logging
+#import logging
+
 import json
 import re
-import lxml
-import lxml.etree
+
 import pyparsing
 from pyparsing import(
         QuotedString, quotedString, Word,
@@ -12,35 +12,17 @@ from pyparsing import(
         alphanums,
     )
 
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+#logging.basicConfig(level=logging.DEBUG)
+#logger = logging.getLogger(__name__)
 
+# enable a pyparsing caching mechanism that speeds things up a lot
 pyparsing.ParserElement.enablePackrat()
 
-term = (
-            QuotedString("{", endQuoteChar="}", unquoteResults=False) |
-            quotedString |
-            Combine(Word(alphanums.lower() + "-" + "*" + "?"))
-    )
-
-orop = Literal("OR")
-andnotop = Literal("AND NOT")
-nearop = pyparsing.Regex(r"W\/\d+")
-andop = Literal("AND") + NotAny(Literal("NOT"))
-implicitandop = Regex(r"\s+").sub("AND").leaveWhitespace() + FollowedBy(term)
-
-expr = pyparsing.infixNotation(
-        term,
-        [
-            (implicitandop, 2, pyparsing.opAssoc.RIGHT),
-            (orop, 2, pyparsing.opAssoc.LEFT),
-            (andop, 2, pyparsing.opAssoc.RIGHT),
-            (andnotop, 2, pyparsing.opAssoc.RIGHT),
-            (nearop, 2, pyparsing.opAssoc.RIGHT),
-        ],
-    )
 
 class SearchTerm(object):
+    """
+        Class to encapsulate a search term
+    """
     def __init__(self, term):
         super().__init__()
         self.has_quotes = False
@@ -60,17 +42,34 @@ class SearchTerm(object):
         return self.term
 
 class Parser(object):
+    """
+        Parse Elsevier SCOPUS queries. Based on the (sparse) documentation at http://schema.elsevier.com/dtds/document/bkapi/search/SCOPUSSearchTips.htm
+    """
+    term = (
+                QuotedString("{", endQuoteChar="}", unquoteResults=False) |
+                quotedString |
+                Combine(Word(alphanums.lower() + "-" + "*" + "?"))
+        )
+
+    orop = Literal("OR")
+    andnotop = Literal("AND NOT")
+    nearop = pyparsing.Regex(r"W\/\d+")
+    andop = Literal("AND") + NotAny(Literal("NOT"))
+    implicitandop = Regex(r"\s+").sub("AND").leaveWhitespace() + FollowedBy(term)
     expr = pyparsing.infixNotation(
             term,
             [
                 (implicitandop, 2, pyparsing.opAssoc.RIGHT),
                 (orop, 2, pyparsing.opAssoc.LEFT),
+                (nearop, 2, pyparsing.opAssoc.RIGHT),
                 (andop, 2, pyparsing.opAssoc.RIGHT),
                 (andnotop, 2, pyparsing.opAssoc.RIGHT),
-                (nearop, 2, pyparsing.opAssoc.RIGHT),
             ],
         )
     def to_prefix(self, e):
+        """
+            Turn the parsed infix query into a prefix tree
+        """
         if isinstance(e, str):
             return {'OR': [SearchTerm(e)]}
         if len(e) == 2:
@@ -114,6 +113,9 @@ class Parser(object):
             return {op: result}
 
     def parse(self, query):
+        """
+            Use a pyparsing grammar of the SCOPUS boolean query syntax to parse a query
+        """
         try:
             result = self.expr.parseString(query, parseAll=True)
         except pyparsing.ParseException as exc:
@@ -124,6 +126,9 @@ class Parser(object):
         return result
 
     def add_clauses(self, operator, clauses, field, in_near=False):
+        """
+            Turn a query parse tree into a elasticsearch query
+        """
         fquery = {}
         result_clauses = []
         if operator[:2] == "W/":
