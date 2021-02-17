@@ -41,6 +41,32 @@ class SearchTerm(object):
     def __str__(self):
         return self.term
 
+    def intervals_split(self):
+        it = iter(self.term.split())
+        result = []
+
+        prev = None
+        while True:
+            try:
+                term = next(it)
+            except StopIteration:
+                if prev is not None:
+                    result.append(prev)
+                break
+            if prev is None:
+                if any(wildcard in term for wildcard in "*?"):
+                    result.append(term)
+                else:
+                    prev = term
+                continue
+            if any(wildcard in term for wildcard in "*?"):
+                result.append(prev)
+                result.append(term)
+                prev = None
+            else:
+                prev = f"{prev} {term}"
+        return result
+
 class Parser(object):
     """
         Parse Elsevier SCOPUS queries. Based on the (sparse) documentation at http://schema.elsevier.com/dtds/document/bkapi/search/SCOPUSSearchTips.htm
@@ -142,7 +168,10 @@ class Parser(object):
             elif isinstance(clause, SearchTerm):
                 if clause.has_quotes and " " in str(clause) and not in_near:
                     if any(wildcard in str(clause) for wildcard in "*?"):
-                        result_clauses.append({'intervals': { field: {'wildcard': { 'pattern': str(clause) } } } })
+                        subclauses = clause.intervals_split()
+                        subclauses = [{'wildcard': {'pattern': clause}} if any(wildcard in clause for wildcard in "*?") else {'match': { 'query': clause}} for clause in subclauses]
+
+                        result_clauses.append({'intervals': { field: { 'all_of': {'ordered': True, 'max_gaps': 0, 'intervals': subclauses } } } })
                     else:
                         result_clauses.append({'intervals': { field: {'match': { 'ordered': True, 'query': str(clause), 'max_gaps': 0 } } } })
                 elif any(wildcard in str(clause) for wildcard in "*?"):
