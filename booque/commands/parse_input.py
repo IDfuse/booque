@@ -42,19 +42,17 @@ def run(**kwargs):
 
     for op, clauses in result.items():
         es = parser.to_elastic(result, 'description.abstract')
-        result = json.dumps(
-                {
+        result = {
                     'query': es,
                 }
-            )
         if kwargs['highlight']:
             result['highlight'] = {
                     'pre_tags': [ "HLSHL" ],
                     'post_tags': [ "HLEHL" ],
                     'fields': { '*': {} },
-                    'fragment_size': 2147483647
+                    'fragment_size': 2147483647,
                 }
-        print(result)
+        print(json.dumps(result))
 
 
 if __name__ == '__main__':
