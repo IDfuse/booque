@@ -66,6 +66,8 @@ class SearchTerm(object):
             else:
                 prev = f"{prev} {term}"
         return result
+    def token_split(self):
+        return re.split(r"[- ]", self.term)
 
 class Parser(object):
     """
@@ -168,22 +170,49 @@ class Parser(object):
             elif isinstance(clause, SearchTerm):
                 if clause.has_quotes and " " in str(clause) and not in_near:
                     if any(wildcard in str(clause) for wildcard in "*?"):
-                        subclauses = clause.intervals_split()
-                        subclauses = [{'wildcard': {'pattern': clause}} if any(wildcard in clause for wildcard in "*?") else {'match': { 'query': clause}} for clause in subclauses]
+                        if not any(wildcard in str(clause)[:-1] for wildcard in "*?"):
+                            # for a multi-token clause with a wildcard only at the end, remove the wildcard to
+                            # turn it into a match_phrase_prefix query. this avoids getting too many expansions
+                            # on the wildcarded final token.
+                            result_clauses.append({'match_phrase_prefix': {field: {"query": str(clause)[:-1]}}})
+                        else:
+                            # if there's wildcards in other places, that's not possible. The next best thing is
+                            # an intervals query, but there are some words in the aurora queries that expand to
+                            # too many tokens. These are hardcoded here, and use a span query instead
+                            # TODO: come up with a solution that doesn't need any hardcoding
+                            if any(exception in str(clause) for exception in ("develop*", "human*","work*","labo*")):
+                                # elastic splits tokens both on space and dash, so we need to do the same for
+                                # span clauses to work
+                                subclauses = clause.token_split()
+                                subclauses = [{'span_multi': {'match': {'wildcard': {field: {'value': str(clause), 'rewrite': "top_terms_50"}}}}} if any(wildcard in clause for wildcard in "*?") else {'span_term': { field: str(clause)}} for clause in subclauses]
+                                result_clauses.append({'span_near': {'clauses': subclauses, 'slop': 0, 'in_order': True}})
+                            else:
+                                subclauses = clause.intervals_split()
+                                subclauses = [{'wildcard': {'pattern': clause}} if any(wildcard in clause for wildcard in "*?") else {'match': { 'query': clause}} for clause in subclauses]
 
-                        result_clauses.append({'intervals': { field: { 'all_of': {'ordered': True, 'max_gaps': 0, 'intervals': subclauses } } } })
+                                result_clauses.append({'intervals': { field: { 'all_of': {'ordered': True, 'max_gaps': 0, 'intervals': subclauses } } } })
                     else:
                         result_clauses.append({'intervals': { field: {'match': { 'ordered': True, 'query': str(clause), 'max_gaps': 0 } } } })
                 elif any(wildcard in str(clause) for wildcard in "*?"):
                     if in_near:
-                        result_clauses.append({'span_multi': {"match": {"wildcard": {field: {"value": str(clause), "rewrite": "top_terms_50"}}}}})
+                        if re.search(r"[- ]", str(clause)):
+                            subclauses = clause.token_split()
+                            subclauses = [{'span_multi': {'match': {'wildcard': {field: {'value': str(clause), 'rewrite': "top_terms_50"}}}}} if any(wildcard in clause for wildcard in "*?") else {'span_term': { field: str(clause)}} for clause in subclauses]
+                            result_clauses.append({'span_near': {'clauses': subclauses, 'slop': 0, 'in_order': True}})
+                        else:
+                            result_clauses.append({'span_multi': {"match": {"wildcard": {field: {"value": str(clause), "rewrite": "top_terms_50"}}}}})
                     else:
                         result_clauses.append({"wildcard": {field: {"value": str(clause)}}})
                 elif clause.is_phrase:
                     result_clauses.append({'match_phrase': {field: str(clause)}})
                 else:
                     if in_near:
-                        result_clauses.append({'span_term': {field: str(clause)}})
+                        if re.search(r"[- ]", str(clause)):
+                            subclauses = clause.token_split()
+                            subclauses = [{'span_term': { field: str(clause)}} for clause in subclauses]
+                            result_clauses.append({'span_near': {'clauses': subclauses, 'slop': 0, 'in_order': True}})
+                        else:
+                            result_clauses.append({'span_term': {field: str(clause)}})
                     else:
                         result_clauses.append({'match': {field: str(clause)}})
         if operator[:2] == "W/":
