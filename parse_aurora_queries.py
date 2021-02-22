@@ -8,33 +8,6 @@ import pyparsing
 
 from booque import Parser, SearchTerm
 
-def old_add_clauses(operator, clauses, field):
-    fquery = {}
-    resultclauses = []
-    if isinstance(clauses, str):
-        return {'span_term': {field: clauses}}
-    for clause in clauses:
-        if isinstance(clause, dict):
-            for suboperator, subclauses in clause.items():
-                resultclauses.append(add_clauses(suboperator, subclauses, field))
-        elif isinstance(clause, SearchTerm):
-            if "*" in str(clause):
-                resultclauses.append({'span_multi': {"match": {"wildcard": {field: {"value": str(clause)}}}}})
-            else:
-                resultclauses.append({'span_term': {field: str(clause)}})
-    if operator[:2] == "W/":
-        _, slop = operator.split("/", 1)
-        return {'span_near': {'clauses': resultclauses, 'slop': slop, 'in_order': False}}
-    elif operator == "OR":
-        return {'span_or': {'clauses': resultclauses}}
-    elif operator == "AND":
-        # emulate and with unlimited slop, per
-        # https://stackoverflow.com/a/39994490
-        return {'span_near': {'clauses': resultclauses, 'slop': 2147483647, 'in_order': False}}
-    elif operator == "AND NOT":
-        return {'span_not': {'include': resultclauses[0], 'exclude': resultclauses[1] }}
-
-
 ns_map = {
         'dc': "http://dublincore.org/documents/dcmi-namespace/",
         'aqd': "http://aurora-network.global/queries/namespace/",
@@ -64,25 +37,19 @@ for sdg in range(1,18):
         lines = qxpe("./aqd:query-lines/aqd:query-line")
         t_should = []
         for n, line in enumerate(lines):
-#            if not (sdg == 3 and sq_id == "2" and n == 0):
-#                print("SKIPPING")
-#                continue
             fields = line.get("field").split("-")
-#            print("  FIELDS:", fields)
             searchstring = re.sub(r"\s+", " ", line.text)
             print("  QUERY", n, ":",searchstring)
             tree = p.parse(searchstring)
             print("  TREE", tree)
             i_should = []
             for field in fields:
-#                if field != 'ABS':
-#                    continue
-                for operator, clauses in tree.items():
-                    result = p.add_clauses(operator, clauses, field_map[field])
-                    i_should.append(result)
+                clauses = p.to_elastic(tree, field_map[field])
+                i_should.append(clauses)
             t_should.append({
                     'bool': { 'should': i_should, 'minimum_should_match': 1 }
                 })
+        print(t_should)
         should.append({
                 'bool': { 'should': t_should, 'minimum_should_match': 1 }
             })
@@ -95,7 +62,8 @@ for sdg in range(1,18):
                     'post_tags': [ "HLEHL" ],
                     'fields': { '*': {} },
                     'fragment_size': 2147483647
-                }
+                },
+                'track_total_hits': True,
             }
         with open(f"es/cnes_SDG-{sdg}.{sq_id}-query.json", "w") as fh:
             json.dump(result, fh)

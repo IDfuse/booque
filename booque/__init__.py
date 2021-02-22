@@ -154,10 +154,16 @@ class Parser(object):
         result = self.to_prefix(result[0])
         return result
 
-    def add_clauses(self, operator, clauses, field, in_near=False):
+    def to_elastic(self, d, field):
         """
             Turn a query parse tree into a elasticsearch query
         """
+        if len(d) > 1:
+            raise ValueError("Expecting a tree with only one root")
+        for k, v in d.items():
+            return self._add_clauses(k, v, field)
+
+    def _add_clauses(self, operator, clauses, field, in_near=False):
         fquery = {}
         result_clauses = []
         if operator[:2] == "W/":
@@ -167,7 +173,7 @@ class Parser(object):
         for clause in clauses:
             if isinstance(clause, dict):
                 for suboperator, subclauses in clause.items():
-                    result_clauses.append(self.add_clauses(suboperator, subclauses, field, in_near=in_near))
+                    result_clauses.append(self._add_clauses(suboperator, subclauses, field, in_near=in_near))
             elif isinstance(clause, SearchTerm):
                 if clause.has_quotes and " " in str(clause) and not in_near:
                     if any(wildcard in str(clause) for wildcard in "*?"):
