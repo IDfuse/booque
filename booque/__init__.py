@@ -33,7 +33,8 @@ class SearchTerm(object):
         elif term[0] == "{":
             term = term[1:-1]
             self.is_phrase = True
-        self.term = term
+        # workaround for some queries that have a space at the end of a quoted term
+        self.term = term.strip()
 
     def __repr__(self):
         return self.term + ("[Q]" if self.has_quotes else "[]") + ("[P]" if self.is_phrase else "[]")
