@@ -6,7 +6,9 @@ elasticsearch ones.
 ## Installation
 
 > `git clone https://github.com/martijnvanbeers/booque`
+
 > create/activate a conda/virtualenv environment
+
 > `pip install .`
 
 or when you plan to make changes:
