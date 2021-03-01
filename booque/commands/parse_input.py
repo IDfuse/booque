@@ -23,14 +23,23 @@ import sys
 
 import click
 from booque import Parser, SearchTerm
+from booque.util import field_map, PlPath, add_highlight, read_config
 
 
 parser = Parser()
 
 @click.command()
-@click.option("--highlight", is_flag=True)
-@click.option("--output", type=click.Choice(["elastic"]))
+@click.option("--highlight", is_flag=True, help="add highlighting to the query")
+@click.option("--output", type=click.Choice(["elastic"]), help="the format of the output query")
+@click.option("--field", default="ABS", show_default=True, help="which scopus field to query")
 def run(**kwargs):
+    """
+    Read a line from STDIN containing a scopus query and translate
+    it to elasticsearch query language
+    """
+
+    read_config()
+
     query = sys.stdin.readlines()
     if len(query) > 1:
         raise ValueError("Only enter one query(line)")
@@ -41,17 +50,12 @@ def run(**kwargs):
         raise ValueError("Expected a tree with a single root")
 
     for op, clauses in result.items():
-        es = parser.to_elastic(result, 'description.abstract')
+        es = parser.to_elastic(result, field_map[kwargs['field']])
         result = {
                     'query': es,
                 }
         if kwargs['highlight']:
-            result['highlight'] = {
-                    'pre_tags': [ "HLSHL" ],
-                    'post_tags': [ "HLEHL" ],
-                    'fields': { '*': {} },
-                    'fragment_size': 2147483647,
-                }
+            add_highlight(result)
         print(json.dumps(result))
 
 

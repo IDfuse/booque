@@ -29,40 +29,28 @@ import pyparsing
 import click
 
 from booque import Parser, SearchTerm
+from booque.util import field_map, PlPath, add_highlight, read_config
 
-
-class PlPath(click.Path):
-    """A Click path argument that returns a pathlib Path, not a string"""
-    def convert(self, value, param, ctx):
-        return pathlib.Path(super().convert(value, param, ctx))
-
-
-def add_highlight(query):
-    query['highlight'] = {
-            'pre_tags': [ "HLSHL" ],
-            'post_tags': [ "HLEHL" ],
-            'fields': { '*': {} },
-            'fragment_size': 2147483647,
-        }
 
 ns_map = {
         'dc': "http://dublincore.org/documents/dcmi-namespace/",
         'aqd': "http://aurora-network.global/queries/namespace/",
     }
 
-field_map = {
-        'TITLE': "description.title",
-        'ABS': "description.abstract",
-        'KEY': "description.keywords",
-    }
-
 p = Parser()
 @click.command()
-@click.option("--highlight", is_flag=True, default=False)
-@click.option("--output", type=click.Choice(["elastic"]))
-@click.option("--outdir", type=PlPath(file_okay=False, dir_okay=True, writable=True, resolve_path=True), default=pathlib.Path("./sdg-queries"))
-@click.option("--indir", type=PlPath(exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True), default=pathlib.Path("./es"))
+@click.option("--highlight", is_flag=True, default=False, help="add highlighting to query")
+@click.option("--output", type=click.Choice(["elastic"]), help="the format of the output")
+@click.option("--outdir", type=PlPath(file_okay=False, dir_okay=True, writable=True, resolve_path=True), default=pathlib.Path("./es"), help="the path of the directory where the output will be stored", show_default=True)
+@click.option("--indir", type=PlPath(exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True), default=pathlib.Path("./sdg-queries"), help="the directory of the aurora xml query files", show_default=True)
 def run(**kwargs):
+    """
+    Read the aurora SDG query xml and translate the queries to
+    elasticsearch query language
+    """
+
+    read_config()
+
     indir = kwargs['indir']
     outdir = kwargs['outdir']
 
@@ -89,9 +77,9 @@ def run(**kwargs):
             for n, line in enumerate(lines):
                 fields = line.get("field").split("-")
                 searchstring = re.sub(r"\s+", " ", line.text)
-                print("  QUERY", n, ":",searchstring)
+                #print("  QUERY", n, ":",searchstring)
                 tree = p.parse(searchstring)
-                print("  TREE", tree)
+                #print("  TREE", tree)
                 i_should = []
                 for field in fields:
                     clauses = p.to_elastic(tree, field_map[field])
@@ -99,7 +87,7 @@ def run(**kwargs):
                 t_should.append({
                         'bool': { 'should': i_should, 'minimum_should_match': 1 }
                     })
-            print(t_should)
+            #print(t_should)
             should.append({
                     'bool': { 'should': t_should, 'minimum_should_match': 1 }
                 })
