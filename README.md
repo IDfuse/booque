@@ -28,18 +28,24 @@ or if you want to see the resulting json:
 ### Aurora
 
 * clone the auroa repository: `git clone https://github.com/Aurora-Network-Global/sdg-queries`
-  (the `parse_aurora_queries.py` script expects this to be in a `aurora-sdg-queries/` directory relative to its location)
 
-* create an `es` directory for the output
+* run `booque_aurora_parse --indir /path/to/sdg-queries --outdir /path/to/output_directory`
 
-* run `python parse_aurora_queries.py`
+  This loops over the xml files from the sdg-queries repository and writes json files containing
+  a elasticsearch query for each target per SDG and also a combined query for each SDG
 
 ### Elsevier
 
 * Download the [Elsevier data](https://data.mendeley.com/datasets/87txkw7khs/1)
 
-* The `parse_elsevier_queries.py` script expects the spreadsheet with the queries in an `elsevier` directory relative to its location)
+* run `booque_elsevier_parse /path/to/SDG_queries_collated_20191010.xlsx --putdir /path/to/output_directory`
 
-* create an es directory for the output
+### Common option
 
-* run `python parse_elsevier_queries.py`
+* each script accepts a `--help` option that has summary information about how to call it
+
+* the `--outdir` option defaults to `./es/`, so if that's an acceptable location, there is no need to specify it
+
+* they all read `$HOME/.config/booque/config.json`. Currently this can only contain a fields object/dict
+  that maps the scopus field names to the elasticsearch field names. If this file doesn't exist, it
+  will be filled with the default mapping
