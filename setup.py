@@ -13,14 +13,20 @@ setup(
         description         = 'scopus-like boolean query parser/translator',
         packages            = find_packages(),
         url                 = 'https://github.com/martijnvanbeers/booque',
-        install_requires    = [ 'pyparsing', 'click' ],
+        install_requires    = [ 'pyparsing', 'click', 'xdg' ],
 
 # https://docs.pytest.org/en/latest/goodpractices.html#integrating-with-setuptools-python-setup-py-test-pytest-runner
         setup_requires      = [ 'pytest-runner' ],
         tests_require       = [ 'pytest' ],
+        extras_require      = {
+                'aurora': ["lxml"],
+                'elsevier': ["pandas", "openpyxl"],
+            },
         entry_points        = {
             'console_scripts': [
                 'booque_parse = booque.commands.parse_input:run',
+                'booque_aurora_parse = booque.commands.parse_aurora_queries:run',
+                'booque_elsevier_parse = booque.commands.parse_elsevier_queries:run',
             ],
         },
     )
