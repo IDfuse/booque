@@ -170,6 +170,28 @@ class Parser(object):
         result = self.to_prefix(result[0])
         return result
 
+    def as_list(self, d):
+        def _walk(d):
+            result = []
+            for _, clause in d.items():
+                if isinstance(clause, SearchTerm):
+                    result.append(str(clause))
+                elif isinstance(clause, dict):
+                    result.extend(_walk(clause))
+                elif isinstance(clause, list):
+                    for subclause in clause:
+                        if isinstance(subclause, SearchTerm):
+                            result.append(str(subclause))
+                        elif isinstance(subclause, dict):
+                            result.extend(_walk(subclause))
+                        else:
+                            raise ValueError("EEP", clause, type(clause))
+                else:
+                    raise ValueError("EEP", clause, type(clause))
+
+            return result
+        return _walk(d)
+
     def to_elastic(self, d, field):
         """
             Turn a query parse tree into a elasticsearch query

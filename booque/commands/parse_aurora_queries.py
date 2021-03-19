@@ -40,7 +40,7 @@ ns_map = {
 p = Parser()
 @click.command()
 @click.option("--highlight", is_flag=True, default=False, help="add highlighting to query")
-@click.option("--output", type=click.Choice(["elastic"]), help="the format of the output")
+@click.option("--output", default="list", type=click.Choice(["list", "elastic"]), help="the format of the output")
 @click.option("--outdir", type=PlPath(file_okay=False, dir_okay=True, writable=True, resolve_path=True), default=pathlib.Path("./es"), help="the path of the directory where the output will be stored", show_default=True)
 @click.option("--indir", type=PlPath(exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True), default=pathlib.Path("./sdg-queries"), help="the directory of the aurora xml query files", show_default=True)
 def run(**kwargs):
@@ -80,35 +80,48 @@ def run(**kwargs):
                 #print("  QUERY", n, ":",searchstring)
                 tree = p.parse(searchstring)
                 #print("  TREE", tree)
-                i_should = []
-                for field in fields:
-                    clauses = p.to_elastic(tree, field_map[field])
-                    i_should.append(clauses)
-                t_should.append({
-                        'bool': { 'should': i_should, 'minimum_should_match': 1 }
-                    })
+                if kwargs['output'] == "elastic":
+                    i_should = []
+                    for field in fields:
+                        clauses = p.to_elastic(tree, field_map[field])
+                        i_should.append(clauses)
+                    t_should.append({
+                            'bool': { 'should': i_should, 'minimum_should_match': 1 }
+                        })
+                elif kwargs['output'] == "list":
+                    t_should = list(set(p.as_list(tree)))
+
             #print(t_should)
-            should.append({
-                    'bool': { 'should': t_should, 'minimum_should_match': 1 }
-                })
+            if kwargs['output'] == "elastic":
+                should.append({
+                        'bool': { 'should': t_should, 'minimum_should_match': 1 }
+                    })
+                result = {
+                        'query': {
+                            'bool': {'should': t_should, 'minimum_should_match': 1}
+                        },
+                        'track_total_hits': True,
+                    }
+                if kwargs['highlight']:
+                    add_highlight(result)
+            elif kwargs['output'] == "list":
+                should.extend(t_should)
+                result = t_should
+
+            outfile = outdir / f"aurora_SDG-{sdg}.{sq_id}-query.json"
+            outfile.write_text(json.dumps(result))
+        if kwargs['output'] == "elastic":
             result = {
                     'query': {
-                        'bool': {'should': t_should, 'minimum_should_match': 1}
+                        'bool': {'should': should, 'minimum_should_match': 1},
                     },
                     'track_total_hits': True,
                 }
             if kwargs['highlight']:
                 add_highlight(result)
-            outfile = outdir / f"aurora_SDG-{sdg}.{sq_id}-query.json"
-            outfile.write_text(json.dumps(result))
-        result = {
-                'query': {
-                    'bool': {'should': should, 'minimum_should_match': 1},
-                },
-                'track_total_hits': True,
-            }
-        if kwargs['highlight']:
-            add_highlight(result)
+        elif kwargs['output'] == "list":
+            result = list(set(should))
+
         outfile = outdir / f"aurora_SDG-{sdg}-query.json"
         outfile.write_text(json.dumps(result))
         print()

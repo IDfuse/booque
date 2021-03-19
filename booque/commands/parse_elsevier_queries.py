@@ -35,7 +35,7 @@ p = Parser()
 
 @click.command()
 @click.option("--highlight", is_flag=True, default=False, help="add highlighting to query")
-@click.option("--output", type=click.Choice(["elastic"]), help="the format of the output")
+@click.option("--output", default="elastic", type=click.Choice(["elastic", "list"]), help="the format of the output")
 @click.option("--outdir", type=PlPath(file_okay=False, dir_okay=True, writable=True, resolve_path=True), default=pathlib.Path("./sdg-queries"), help="the path of the directory where the output will be stored", show_default=True)
 @click.option("--indir", type=PlPath(exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True), default=pathlib.Path("./es"), help="the directory of the aurora xml query files", show_default=True)
 @click.argument("infile", type=PlPath(exists=True, file_okay=True, dir_okay=False, readable=True, resolve_path=True), default=pathlib.Path("SDG_queries_collated-20191010.xlsx"), required=True)
@@ -65,24 +65,28 @@ def run(infile, **kwargs):
 
         tree = p.parse(query)
 
-        should = []
-        for field in fields:
-            clauses = p.to_elastic(tree, field_map[field])
-            should.append(clauses)
-        result = {
-                'query': {
-                    'bool': {'should': should}
-                },
-                'highlight': {
-                    'pre_tags': [ "HLSHL" ],
-                    'post_tags': [ "HLEHL" ],
-                    'fields': { '*': {} },
-                    'fragment_size': 2147483647
-                },
-                'track_total_hits': True,
-            }
-        if kwargs['highlight']:
-            add_highlight(result)
+        if kwargs['output'] == "elastic":
+            should = []
+            for field in fields:
+                clauses = p.to_elastic(tree, field_map[field])
+                should.append(clauses)
+            result = {
+                    'query': {
+                        'bool': {'should': should}
+                    },
+                    'highlight': {
+                        'pre_tags': [ "HLSHL" ],
+                        'post_tags': [ "HLEHL" ],
+                        'fields': { '*': {} },
+                        'fragment_size': 2147483647
+                    },
+                    'track_total_hits': True,
+                }
+            if kwargs['highlight']:
+                add_highlight(result)
+        elif kwargs['output'] == "list":
+            result = list(set(p.as_list(tree)))
+
         outfile = outdir / f"elsevier_SDG-{sdg}-query.json"
         outfile.write_text(json.dumps(result))
 

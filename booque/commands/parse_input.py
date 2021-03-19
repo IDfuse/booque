@@ -30,7 +30,7 @@ parser = Parser()
 
 @click.command()
 @click.option("--highlight", is_flag=True, help="add highlighting to the query")
-@click.option("--output", type=click.Choice(["elastic"]), help="the format of the output query")
+@click.option("--output", default="elastic", type=click.Choice(["elastic", "list"]), help="the format of the output query")
 @click.option("--field", default="ABS", show_default=True, help="which scopus field to query")
 def run(**kwargs):
     """
@@ -49,7 +49,7 @@ def run(**kwargs):
     if len(result) > 1:
         raise ValueError("Expected a tree with a single root")
 
-    for op, clauses in result.items():
+    if kwargs['output'] == "elastic":
         es = parser.to_elastic(result, field_map[kwargs['field']])
         result = {
                     'query': es,
@@ -57,7 +57,10 @@ def run(**kwargs):
         if kwargs['highlight']:
             add_highlight(result)
         print(json.dumps(result))
-
+    elif kwargs['output'] == "list":
+        termlist = parser.as_list(result)
+        for term in termlist:
+            print(term)
 
 if __name__ == '__main__':
     run()
