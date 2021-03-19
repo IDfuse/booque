@@ -37,7 +37,6 @@ p = Parser()
 @click.option("--highlight", is_flag=True, default=False, help="add highlighting to query")
 @click.option("--output", default="elastic", type=click.Choice(["elastic", "list"]), help="the format of the output")
 @click.option("--outdir", type=PlPath(file_okay=False, dir_okay=True, writable=True, resolve_path=True), default=pathlib.Path("./sdg-queries"), help="the path of the directory where the output will be stored", show_default=True)
-@click.option("--indir", type=PlPath(exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True), default=pathlib.Path("./es"), help="the directory of the aurora xml query files", show_default=True)
 @click.argument("infile", type=PlPath(exists=True, file_okay=True, dir_okay=False, readable=True, resolve_path=True), default=pathlib.Path("SDG_queries_collated-20191010.xlsx"), required=True)
 def run(infile, **kwargs):
     """
